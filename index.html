@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Luxury Racer X</title>
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:Segoe UI,sans-serif;
+}
+
+body{
+    background:#050505;
+    overflow:hidden;
+}
+
+#gameContainer{
+    width:100vw;
+    height:100vh;
+    position:relative;
+}
+
+canvas{
+    display:block;
+    background:linear-gradient(to bottom,#0d0d0d,#1a1a1a);
+}
+
+#hud{
+    position:absolute;
+    top:15px;
+    left:15px;
+    color:#FFD700;
+    z-index:10;
+    background:rgba(0,0,0,.4);
+    backdrop-filter:blur(10px);
+    padding:12px 18px;
+    border-radius:15px;
+    border:1px solid rgba(255,215,0,.3);
+    box-shadow:0 0 20px rgba(255,215,0,.2);
+}
+
+#hud h2{
+    font-size:18px;
+}
+
+#score{
+    margin-top:5px;
+}
+
+#gameOver{
+    position:absolute;
+    inset:0;
+    display:none;
+    justify-content:center;
+    align-items:center;
+    flex-direction:column;
+    background:rgba(0,0,0,.9);
+    color:white;
+    z-index:20;
+}
+
+#gameOver h1{
+    color:#FFD700;
+    margin-bottom:15px;
+}
+
+button{
+    margin-top:15px;
+    padding:12px 25px;
+    border:none;
+    border-radius:30px;
+    background:#FFD700;
+    color:black;
+    font-weight:bold;
+    cursor:pointer;
+}
+
+.controls{
+    position:absolute;
+    bottom:30px;
+    width:100%;
+    display:flex;
+    justify-content:space-between;
+    padding:0 30px;
+    z-index:15;
+}
+
+.ctrl{
+    width:80px;
+    height:80px;
+    border-radius:50%;
+    border:2px solid #FFD700;
+    color:#FFD700;
+    background:rgba(255,255,255,.05);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:30px;
+    user-select:none;
+}
+</style>
+</head>
+<body>
+
+<div id="gameContainer">
+
+<div id="hud">
+<h2>🏁 Luxury Racer X</h2>
+<div id="score">Score: 0</div>
+<div id="highScore">High Score: 0</div>
+</div>
+
+<canvas id="game"></canvas>
+
+<div class="controls">
+<div class="ctrl" id="leftBtn">◀</div>
+<div class="ctrl" id="rightBtn">▶</div>
+</div>
+
+<div id="gameOver">
+<h1>GAME OVER</h1>
+<p id="finalScore"></p>
+<button onclick="restartGame()">Main Lagi</button>
+</div>
+
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+canvas.width = innerWidth;
+canvas.height = innerHeight;
+
+let score = 0;
+let gameRunning = true;
+
+let highScore = localStorage.getItem("luxuryHigh") || 0;
+document.getElementById("highScore").innerText =
+"High Score: " + highScore;
+
+const roadWidth = 350;
+
+const player = {
+    width:60,
+    height:110,
+    x:canvas.width/2-30,
+    y:canvas.height-150,
+    speed:8
+};
+
+let enemies = [];
+let roadOffset = 0;
+
+const keys = {};
+
+document.addEventListener("keydown",e=>{
+    keys[e.key]=true;
+});
+
+document.addEventListener("keyup",e=>{
+    keys[e.key]=false;
+});
+
+function createEnemy(){
+    const laneX =
+    canvas.width/2-roadWidth/2+
+    Math.random()*(roadWidth-60);
+
+    enemies.push({
+        x:laneX,
+        y:-120,
+        width:60,
+        height:110,
+        speed:5+Math.random()*3
+    });
+}
+
+setInterval(()=>{
+    if(gameRunning) createEnemy();
+},1000);
+
+function drawRoad(){
+
+    const roadX = canvas.width/2-roadWidth/2;
+
+    ctx.fillStyle="#222";
+    ctx.fillRect(roadX,0,roadWidth,canvas.height);
+
+    ctx.strokeStyle="#FFD700";
+    ctx.lineWidth=5;
+
+    ctx.beginPath();
+    ctx.moveTo(roadX,0);
+    ctx.lineTo(roadX,canvas.height);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(roadX+roadWidth,0);
+    ctx.lineTo(roadX+roadWidth,canvas.height);
+    ctx.stroke();
+
+    roadOffset+=8;
+
+    ctx.strokeStyle="white";
+    ctx.lineWidth=4;
+
+    for(let y=-40+roadOffset%60;y<canvas.height;y+=60){
+        ctx.beginPath();
+        ctx.moveTo(canvas.width/2,y);
+        ctx.lineTo(canvas.width/2,y+30);
+        ctx.stroke();
+    }
+}
+
+function drawCar(x,y,color){
+    ctx.fillStyle=color;
+    ctx.fillRect(x,y,60,110);
+
+    ctx.fillStyle="#111";
+    ctx.fillRect(x+10,y+15,40,25);
+
+    ctx.fillStyle="#111";
+    ctx.fillRect(x+10,y+70,40,25);
+
+    ctx.fillStyle="#FFD700";
+    ctx.fillRect(x+5,y+40,50,20);
+}
+
+function collision(a,b){
+    return(
+        a.x < b.x+b.width &&
+        a.x+a.width > b.x &&
+        a.y < b.y+b.height &&
+        a.y+a.height > b.y
+    );
+}
+
+function update(){
+
+    if(!gameRunning) return;
+
+    if(keys["ArrowLeft"] || keys["a"]){
+        player.x-=player.speed;
+    }
+
+    if(keys["ArrowRight"] || keys["d"]){
+        player.x+=player.speed;
+    }
+
+    const minRoad =
+    canvas.width/2-roadWidth/2;
+
+    const maxRoad =
+    canvas.width/2+roadWidth/2-player.width;
+
+    if(player.x<minRoad) player.x=minRoad;
+    if(player.x>maxRoad) player.x=maxRoad;
+
+    enemies.forEach((enemy,index)=>{
+
+        enemy.y += enemy.speed;
+
+        if(collision(player,enemy)){
+            gameOver();
+        }
+
+        if(enemy.y > canvas.height+100){
+            enemies.splice(index,1);
+            score+=10;
+        }
+    });
+
+    document.getElementById("score").innerText =
+    "Score: " + score;
+}
+
+function render(){
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    drawRoad();
+
+    drawCar(player.x,player.y,"#FFD700");
+
+    enemies.forEach(enemy=>{
+        drawCar(enemy.x,enemy.y,"#ff3333");
+    });
+}
+
+function gameLoop(){
+
+    update();
+    render();
+
+    requestAnimationFrame(gameLoop);
+}
+
+function gameOver(){
+
+    gameRunning=false;
+
+    if(score>highScore){
+        highScore=score;
+        localStorage.setItem("luxuryHigh",score);
+    }
+
+    document.getElementById("finalScore").innerText =
+    "Skor Akhir: " + score;
+
+    document.getElementById("gameOver").style.display="flex";
+}
+
+function restartGame(){
+
+    score=0;
+    enemies=[];
+    player.x=canvas.width/2-30;
+    gameRunning=true;
+
+    document.getElementById("gameOver").style.display="none";
+
+    highScore = localStorage.getItem("luxuryHigh") || 0;
+
+    document.getElementById("highScore").innerText =
+    "High Score: " + highScore;
+}
+
+const leftBtn=document.getElementById("leftBtn");
+const rightBtn=document.getElementById("rightBtn");
+
+leftBtn.addEventListener("touchstart",()=>{
+    keys["ArrowLeft"]=true;
+});
+
+leftBtn.addEventListener("touchend",()=>{
+    keys["ArrowLeft"]=false;
+});
+
+rightBtn.addEventListener("touchstart",()=>{
+    keys["ArrowRight"]=true;
+});
+
+rightBtn.addEventListener("touchend",()=>{
+    keys["ArrowRight"]=false;
+});
+
+window.addEventListener("resize",()=>{
+    canvas.width=innerWidth;
+    canvas.height=innerHeight;
+});
+
+gameLoop();
+</script>
+
+</body>
+</html>
